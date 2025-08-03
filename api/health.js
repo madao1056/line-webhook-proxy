@@ -1,5 +1,7 @@
+const { sendSuccess } = require('./_utils/response');
+
 module.exports = (req, res) => {
-  res.status(200).json({
+  const healthData = {
     status: 'healthy',
     service: 'line-webhook-proxy',
     timestamp: new Date().toISOString(),
@@ -10,5 +12,7 @@ module.exports = (req, res) => {
       hasApiKey: !!process.env.API_KEY,
       nodeEnv: process.env.NODE_ENV
     }
-  });
+  };
+  
+  sendSuccess(res, healthData);
 };

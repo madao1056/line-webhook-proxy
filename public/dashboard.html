@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE Webhook Proxy Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50">
+    <!-- ヘッダー -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-share-nodes text-green-600 text-2xl"></i>
+                    <h1 class="text-xl font-bold text-gray-800">LINE Webhook Proxy</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="checkHealth()" class="text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-heartbeat"></i> ヘルスチェック
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- メインコンテンツ -->
+    <div class="container mx-auto px-4 py-8">
+        <!-- テナント選択 -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">テナントID</label>
+            <div class="flex space-x-2">
+                <input type="text" id="tenantId" placeholder="例: tenant123" 
+                    class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 px-4 py-2 border">
+                <button onclick="loadDashboard()" 
+                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">
+                    <i class="fas fa-search"></i> 読み込み
+                </button>
+            </div>
+        </div>
+
+        <!-- タブ -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="border-b">
+                <nav class="flex -mb-px">
+                    <button onclick="switchTab('endpoints')" id="tab-endpoints" 
+                        class="tab-button active px-6 py-3 text-sm font-medium">
+                        <i class="fas fa-plug"></i> エンドポイント
+                    </button>
+                    <button onclick="switchTab('logs')" id="tab-logs" 
+                        class="tab-button px-6 py-3 text-sm font-medium">
+                        <i class="fas fa-list"></i> ログ
+                    </button>
+                    <button onclick="switchTab('test')" id="tab-test" 
+                        class="tab-button px-6 py-3 text-sm font-medium">
+                        <i class="fas fa-vial"></i> テスト送信
+                    </button>
+                </nav>
+            </div>
+
+            <!-- エンドポイントタブ -->
+            <div id="content-endpoints" class="p-6">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold">転送先エンドポイント</h2>
+                    <button onclick="showAddEndpointModal()" 
+                        class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition text-sm">
+                        <i class="fas fa-plus"></i> 新規追加
+                    </button>
+                </div>
+                <div id="endpoints-list" class="space-y-4">
+                    <!-- エンドポイントリストがここに表示される -->
+                </div>
+            </div>
+
+            <!-- ログタブ -->
+            <div id="content-logs" class="p-6 hidden">
+                <div class="mb-4">
+                    <h2 class="text-lg font-semibold mb-2">転送ログ</h2>
+                    <div class="flex space-x-2">
+                        <select id="log-filter" class="rounded-md border-gray-300 shadow-sm px-3 py-1 text-sm">
+                            <option value="">すべて</option>
+                            <option value="success">成功のみ</option>
+                            <option value="failure">失敗のみ</option>
+                        </select>
+                        <button onclick="loadLogs()" class="text-sm text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-sync"></i> 更新
+                        </button>
+                    </div>
+                </div>
+                <div id="logs-list" class="space-y-2">
+                    <!-- ログリストがここに表示される -->
+                </div>
+            </div>
+
+            <!-- テスト送信タブ -->
+            <div id="content-test" class="p-6 hidden">
+                <h2 class="text-lg font-semibold mb-4">Webhookテスト送信</h2>
+                <div class="max-w-2xl">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">メッセージタイプ</label>
+                        <select id="test-type" class="w-full rounded-md border-gray-300 shadow-sm px-3 py-2">
+                            <option value="message">テキストメッセージ</option>
+                            <option value="follow">フォローイベント</option>
+                            <option value="unfollow">アンフォローイベント</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">テストメッセージ</label>
+                        <textarea id="test-message" rows="3" 
+                            class="w-full rounded-md border-gray-300 shadow-sm px-3 py-2"
+                            placeholder="テストメッセージを入力">こんにちは！これはテストメッセージです。</textarea>
+                    </div>
+                    <button onclick="sendTestWebhook()" 
+                        class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition">
+                        <i class="fas fa-paper-plane"></i> テスト送信
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ステータス表示 -->
+        <div id="status-message" class="hidden fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg"></div>
+    </div>
+
+    <!-- エンドポイント追加モーダル -->
+    <div id="add-endpoint-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <h3 class="text-lg font-semibold mb-4">エンドポイントを追加</h3>
+            <form onsubmit="addEndpoint(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">名前</label>
+                    <input type="text" id="endpoint-name" required
+                        class="w-full rounded-md border-gray-300 shadow-sm px-3 py-2">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">URL</label>
+                    <input type="url" id="endpoint-url" required placeholder="https://example.com/webhook"
+                        class="w-full rounded-md border-gray-300 shadow-sm px-3 py-2">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">優先度</label>
+                    <input type="number" id="endpoint-priority" value="50" min="0" max="100"
+                        class="w-full rounded-md border-gray-300 shadow-sm px-3 py-2">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">
+                        キャンセル
+                    </button>
+                    <button type="submit" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        追加
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // API設定
+        const API_KEY = localStorage.getItem('apiKey') || prompt('APIキーを入力してください:');
+        if (API_KEY) localStorage.setItem('apiKey', API_KEY);
+
+        // 現在のテナントID
+        let currentTenantId = null;
+
+        // タブ切り替え
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('[id^="content-"]').forEach(content => content.classList.add('hidden'));
+            
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+        }
+
+        // ダッシュボード読み込み
+        async function loadDashboard() {
+            const tenantId = document.getElementById('tenantId').value;
+            if (!tenantId) {
+                showStatus('テナントIDを入力してください', 'error');
+                return;
+            }
+            
+            currentTenantId = tenantId;
+            await loadEndpoints();
+            await loadLogs();
+        }
+
+        // エンドポイント読み込み
+        async function loadEndpoints() {
+            if (!currentTenantId) return;
+
+            try {
+                const response = await fetch(`/api/endpoints?tenantId=${currentTenantId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch endpoints');
+                }
+
+                const data = await response.json();
+                
+                // メインシステムを追加
+                const allEndpoints = [
+                    {
+                        id: 'main-system',
+                        name: 'メインシステム（自動）',
+                        url: 'https://line-auto-reply.vercel.app/api/line-webhook/' + currentTenantId,
+                        enabled: true,
+                        priority: 999,
+                        isSystem: true
+                    },
+                    ...(data.endpoints || [])
+                ];
+
+                displayEndpoints(allEndpoints);
+                currentEndpoints = allEndpoints;
+            } catch (error) {
+                showStatus('エンドポイントの読み込みに失敗しました', 'error');
+                console.error(error);
+            }
+        }
+
+        // エンドポイント表示
+        function displayEndpoints(endpoints) {
+            const list = document.getElementById('endpoints-list');
+            list.innerHTML = endpoints.map(ep => `
+                <div class="border rounded-lg p-4 ${ep.enabled ? 'bg-white' : 'bg-gray-100'}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="font-medium text-gray-900">${ep.name}</h3>
+                            <p class="text-sm text-gray-600 mt-1">${ep.url}</p>
+                            <div class="flex items-center space-x-4 mt-2 text-sm">
+                                <span class="text-gray-500">優先度: ${ep.priority}</span>
+                                <span class="${ep.enabled ? 'text-green-600' : 'text-gray-500'}">
+                                    <i class="fas fa-circle text-xs"></i> ${ep.enabled ? '有効' : '無効'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            ${!ep.isSystem ? `
+                                <button onclick="toggleEndpoint('${ep.id}')" 
+                                    class="text-sm text-blue-600 hover:text-blue-800">
+                                    <i class="fas fa-${ep.enabled ? 'pause' : 'play'}"></i>
+                                </button>
+                                <button onclick="deleteEndpoint('${ep.id}')" 
+                                    class="text-sm text-red-600 hover:text-red-800">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ログ読み込み
+        async function loadLogs() {
+            if (!currentTenantId) return;
+
+            try {
+                const filter = document.getElementById('log-filter').value;
+                let url = `/api/logs?tenantId=${currentTenantId}&limit=50`;
+                if (filter) {
+                    url += `&status=${filter}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch logs');
+                }
+
+                const data = await response.json();
+                const logs = (data.logs || []).map(log => ({
+                    id: log.id,
+                    timestamp: log.created_at,
+                    status: log.status,
+                    endpoint: log.endpoint_name,
+                    responseTime: log.response_time_ms,
+                    statusCode: log.status_code,
+                    error: log.error_message
+                }));
+
+                displayLogs(logs);
+                
+                // 統計情報を表示（オプション）
+                if (data.stats) {
+                    console.log('Stats:', data.stats);
+                }
+            } catch (error) {
+                showStatus('ログの読み込みに失敗しました', 'error');
+                console.error(error);
+            }
+        }
+
+        // ログ表示
+        function displayLogs(logs) {
+            const list = document.getElementById('logs-list');
+            const filter = document.getElementById('log-filter').value;
+            
+            const filteredLogs = filter ? logs.filter(log => log.status === filter) : logs;
+            
+            list.innerHTML = filteredLogs.map(log => `
+                <div class="border rounded p-3 ${log.status === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <span class="font-medium">${log.endpoint}</span>
+                            <span class="text-sm text-gray-600 ml-2">
+                                ${new Date(log.timestamp).toLocaleString('ja-JP')}
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-3 text-sm">
+                            <span>${log.responseTime}ms</span>
+                            ${log.status === 'success' 
+                                ? `<span class="text-green-600">成功 (${log.statusCode})</span>`
+                                : `<span class="text-red-600">失敗 (${log.error})</span>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // テストWebhook送信
+        async function sendTestWebhook() {
+            if (!currentTenantId) {
+                showStatus('テナントIDを設定してください', 'error');
+                return;
+            }
+
+            const type = document.getElementById('test-type').value;
+            const message = document.getElementById('test-message').value;
+
+            const testData = {
+                destination: 'test-destination',
+                events: []
+            };
+
+            if (type === 'message') {
+                testData.events.push({
+                    type: 'message',
+                    message: {
+                        type: 'text',
+                        text: message
+                    },
+                    source: { userId: 'test-user' },
+                    timestamp: Date.now(),
+                    replyToken: 'test-reply-token'
+                });
+            } else {
+                testData.events.push({
+                    type: type,
+                    source: { userId: 'test-user' },
+                    timestamp: Date.now()
+                });
+            }
+
+            try {
+                const response = await fetch(`/api/webhook/${currentTenantId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const result = await response.json();
+                showStatus('テストWebhookを送信しました', 'success');
+                
+                // ログを更新
+                setTimeout(loadLogs, 1000);
+            } catch (error) {
+                showStatus('送信に失敗しました: ' + error.message, 'error');
+            }
+        }
+
+        // ヘルスチェック
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    showStatus('システムは正常に動作しています', 'success');
+                } else {
+                    showStatus('システムに問題があります', 'error');
+                }
+            } catch (error) {
+                showStatus('ヘルスチェックに失敗しました', 'error');
+            }
+        }
+
+        // ステータス表示
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg ${
+                type === 'success' ? 'bg-green-600 text-white' : 
+                type === 'error' ? 'bg-red-600 text-white' : 
+                'bg-gray-600 text-white'
+            }`;
+            statusEl.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusEl.classList.add('hidden');
+            }, 3000);
+        }
+
+        // モーダル表示
+        function showAddEndpointModal() {
+            document.getElementById('add-endpoint-modal').classList.remove('hidden');
+        }
+
+        // モーダル閉じる
+        function closeModal() {
+            document.getElementById('add-endpoint-modal').classList.add('hidden');
+        }
+
+        // エンドポイント追加
+        async function addEndpoint(event) {
+            event.preventDefault();
+            
+            if (!currentTenantId) {
+                showStatus('テナントIDを設定してください', 'error');
+                return;
+            }
+            
+            const name = document.getElementById('endpoint-name').value;
+            const url = document.getElementById('endpoint-url').value;
+            const priority = parseInt(document.getElementById('endpoint-priority').value);
+            
+            try {
+                const response = await fetch('/api/endpoints', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        tenant_id: currentTenantId,
+                        name,
+                        url,
+                        priority,
+                        enabled: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to add endpoint');
+                }
+                
+                showStatus('エンドポイントを追加しました', 'success');
+                closeModal();
+                event.target.reset();
+                
+                // リストを更新
+                await loadEndpoints();
+            } catch (error) {
+                showStatus('エンドポイントの追加に失敗しました', 'error');
+                console.error(error);
+            }
+        }
+        
+        // エンドポイント削除
+        async function deleteEndpoint(endpointId) {
+            if (!confirm('このエンドポイントを削除しますか？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/endpoints?id=${endpointId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to delete endpoint');
+                }
+                
+                showStatus('エンドポイントを削除しました', 'success');
+                await loadEndpoints();
+            } catch (error) {
+                showStatus('エンドポイントの削除に失敗しました', 'error');
+                console.error(error);
+            }
+        }
+        
+        // エンドポイント有効/無効切り替え
+        async function toggleEndpoint(endpointId) {
+            try {
+                // 現在の状態を取得
+                const endpoints = await getEndpoints();
+                const endpoint = endpoints.find(ep => ep.id === endpointId);
+                if (!endpoint) return;
+                
+                const response = await fetch(`/api/endpoints?id=${endpointId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        enabled: !endpoint.enabled
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to toggle endpoint');
+                }
+                
+                showStatus(`エンドポイントを${!endpoint.enabled ? '有効' : '無効'}にしました`, 'success');
+                await loadEndpoints();
+            } catch (error) {
+                showStatus('エンドポイントの更新に失敗しました', 'error');
+                console.error(error);
+            }
+        }
+        
+        // エンドポイント一覧を取得（内部用）
+        let currentEndpoints = [];
+        async function getEndpoints() {
+            return currentEndpoints;
+        }
+
+        // スタイル
+        const style = document.createElement('style');
+        style.textContent = `
+            .tab-button {
+                border-bottom: 2px solid transparent;
+                transition: all 0.2s;
+            }
+            .tab-button:hover {
+                border-bottom-color: #e5e7eb;
+            }
+            .tab-button.active {
+                border-bottom-color: #10b981;
+                color: #10b981;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTenantId = localStorage.getItem('lastTenantId');
+            if (savedTenantId) {
+                document.getElementById('tenantId').value = savedTenantId;
+                loadDashboard();
+            }
+        });
+
+        // テナントID保存
+        document.getElementById('tenantId').addEventListener('change', (e) => {
+            localStorage.setItem('lastTenantId', e.target.value);
+        });
+    </script>
+</body>
+</html>

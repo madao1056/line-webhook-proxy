@@ -1,25 +1,5 @@
-const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
-
-// Supabaseクライアントの初期化
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const supabase = supabaseUrl && supabaseServiceRoleKey
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : null;
-
-// 簡易的なログ出力
-const logger = {
-  info: (msg, data) => console.log(`[INFO] ${msg}`, data || ''),
-  error: (msg, err) => console.error(`[ERROR] ${msg}`, err || ''),
-  warn: (msg, data) => console.warn(`[WARN] ${msg}`, data || '')
-};
+const { supabase } = require('../_utils/supabase');
+const { logger } = require('../_utils/logger');
 
 // エンドポイントへの転送処理
 async function forwardToEndpoint(url, body, signature, retryCount = 3) {
