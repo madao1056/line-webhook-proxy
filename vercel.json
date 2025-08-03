@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "functions": {
+    "api/health.js": {
+      "maxDuration": 10
+    },
+    "api/webhook/[tenantId].js": {
+      "maxDuration": 10
+    }
+  }
+}
